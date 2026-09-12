@@ -1,3 +1,9 @@
+---
+トークン使用量推定値:
+  1回あたり: 2401
+  エンコーディング: "cl100k_base"
+---
+
 # git-resolve-conflicts
 
 Claude Code用のコンフリクト解決スキルです。
