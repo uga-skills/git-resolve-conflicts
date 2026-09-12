@@ -1,5 +1,6 @@
 ---
-description: rebase/merge で発生したコンフリクトをファイル種別ごとの方針で解決する。git-rebase / git-merge から呼ばれるほか、単体でも、GitHub PR URL を渡しても起動できる
+name: git-resolve-conflicts
+description: rebase/merge で発生したコンフリクトをファイル種別ごとの方針（設定ファイルは意図を汲んで手動マージ、自動生成ファイルは再生成コマンド任せ）で解決する。git-rebase / git-merge から呼ばれるほか、単体でも、GitHub PR URL を渡しても起動できる。ユーザーが「コンフリクト直して」「PRのコンフリクトを解決して」など、マージ/リベースの衝突解決を求めている場合は必ずこのスキルを使う。
 ---
 
 # Skill: git-resolve-conflicts
