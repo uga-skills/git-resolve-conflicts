@@ -1,6 +1,7 @@
 ---
 トークン使用量推定値: 2123
 計測方法: "Anthropic Messages API count_tokens (claude-sonnet-5)"
+SKILL.md行数: 79
 ---
 
 # git-resolve-conflicts
