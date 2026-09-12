@@ -5,75 +5,75 @@ description: rebase/merge で発生したコンフリクトをファイル種別
 
 # Skill: git-resolve-conflicts
 
-## 引数
+## Arguments
 
-- 引数なし: 現在進行中の rebase/merge のコンフリクトをその場で解決する（既存動作）。
-- GitHub PR の URL（`https://github.com/<owner>/<repo>/pull/<number>`）が渡された場合:
-  1. `gh pr view <url> --json number,headRefName,baseRefName` で target（head）ブランチと base ブランチを取得する。
-  2. `git fetch origin <baseRefName> <headRefName>` で両ブランチを最新化する（PR起点のこの呼び出しでは fetch してよい。git-rebase/git-merge 単体呼び出し時の「fetchしない」ルールとは別枠）。
-  3. target ブランチをローカルにチェックアウトする（ローカルに存在しなければ `gh pr checkout <number>`、存在すれば `git switch <headRefName>` して `git reset --hard origin/<headRefName>` で最新化）。
-  4. `git rebase origin/<baseRefName>` を実行する。
-  5. コンフリクトが出た場合、以下の「手順」に従って解決する。
-  6. 解決後、「報告フォーマット」に従ってユーザーに報告し、**同一内容を `gh pr comment <number> --body-file <一時ファイル>` でPRにもコメントする**。
-  7. 書き換わったブランチを origin に反映する（force push）には、必ず事前にユーザーの明示的な許可を得る。無断で `git push --force` / `--force-with-lease` を実行しない。
+- No arguments: resolve conflicts from a rebase/merge currently in progress, in place (existing behavior).
+- A GitHub PR URL (`https://github.com/<owner>/<repo>/pull/<number>`):
+  1. Get the target (head) and base branches with `gh pr view <url> --json number,headRefName,baseRefName`.
+  2. Update both branches with `git fetch origin <baseRefName> <headRefName>` (fetching is allowed for this PR-triggered call — this is a separate rule from the "don't fetch" rule that applies when git-rebase/git-merge are invoked standalone).
+  3. Check out the target branch locally (`gh pr checkout <number>` if it doesn't exist locally yet; otherwise `git switch <headRefName>` then `git reset --hard origin/<headRefName>` to bring it up to date).
+  4. Run `git rebase origin/<baseRefName>`.
+  5. If conflicts occur, resolve them following the "Steps" section below.
+  6. After resolving, report to the user per "Report format", and **post the same content to the PR with `gh pr comment <number> --body-file <temp-file>`**.
+  7. Pushing the rewritten branch back to origin (force push) always requires the user's explicit permission first. Never run `git push --force` / `--force-with-lease` without asking.
 
-## 前提
+## Preconditions
 
-- 引数なし呼び出しの場合、`git status` で `rebase in progress` / `You are currently merging` のどちらの状態かを確認する。以降の `--continue` はこの判定に従う。
-- コンフリクトが存在しない場合は「コンフリクトなし」とだけ報告して終了する。
+- For a no-argument call, check `git status` to determine whether it's `rebase in progress` or `You are currently merging`. The `--continue` step below follows this determination.
+- If there are no conflicts, just report "No conflicts" and finish.
 
-## 報告フォーマット
+## Report format
 
-コンフリクトを解決したファイルごとに、以下の形式で報告する（PRコメント時も同一フォーマット）。
+For each conflict-resolved file, report using the following format (same format for PR comments):
 
 ```
-## <ファイル名> <行数>
+## <file name> <line numbers>
 
 \`\`\`diff
-<解決後の該当差分>
+<relevant diff after resolution>
 \`\`\`
 
-<競合原因、解決方法、影響範囲を簡潔に>
+<brief note on the cause of the conflict, how it was resolved, and the scope of impact>
 ```
 
-- `<ファイル名> <行数>` は解決箇所ごとに見出しとして分ける（1ファイル内に複数箇所あれば見出しを複数立てる）。
-- diff ブロックには解決前後が分かるよう、コンフリクト箇所の差分（もしくは解決後の該当ハンク）を示す。
-- 本文は「競合原因」「解決方法」「影響範囲」の3点を簡潔に触れる（見出しは不要、地の文でよい）。
+- Give `<file name> <line numbers>` its own heading per resolved spot (multiple headings if a single file has multiple conflict spots).
+- The diff block should show the diff (or the resolved hunk) so before/after is clear.
+- The body should briefly touch on "cause of conflict," "resolution approach," and "scope of impact" (no sub-headings needed, plain prose is fine).
 
-## 手順
+## Steps
 
-1. `git status` でコンフリクトファイル（`UU`, `AA`, `AU`, `UA` 等）を列挙する。
-2. ファイルごとに種別判定し、方針を分ける。
+1. List conflicted files from `git status` (`UU`, `AA`, `AU`, `UA`, etc.).
+2. Classify each file by type and branch the approach:
 
-   - **`package.json` など人間が書く設定ファイル**：`git diff` でコンフリクトマーカーを含む差分を読み、両側の変更意図を確認する。単純にどちらか一方を採用せず、両側の意図を汲んだマージを行う（例：片方が依存追加、片方がバージョン更新なら両方を反映）。**必ず解決内容をユーザーに要約して報告する**（黙って解決しない）。判断が割れる場合はユーザーに確認する。
-   - **自動生成ファイル**（`yarn.lock` / `package-lock.json` / `pnpm-lock.yaml` などのロックファイルに限らず、ビルド成果物・自動生成コードなど「人が直接編集しない」ファイル全般）：**手編集で解決することは禁止**。
-     - 対応する手書きファイル（`package.json` 等）側のコンフリクトを先に解決したうえで、再生成コマンド（`yarn install` / `npm install` / `pnpm install` など、プロジェクトの `packageManager` フィールドやファイル種別から判定）を実行し、自動再生成に任せる。
-     - 再生成方法が不明な場合は、推測で手を出さず**ユーザーに確認する**。確認して得た再生成方法は、次回以降同じ状況で迷わないよう記憶（メモリ）に保存する。
-     - 再生成コマンド実行後、`git status` で新たに増えた未追跡ファイルや新規差分がないか確認し、あれば漏れなく `git add` する（再生成の副作用で更新される関連ファイルを取りこぼさない）。
-   - **その他のテキストファイル（コード等）**：コンフリクトマーカー周辺の文脈を読み、両側の変更意図を汲んで解決する。意図が競合し自明でない場合はユーザーに確認する。
+   - **Human-authored config files (e.g. `package.json`)**: Read the diff containing conflict markers with `git diff` to understand both sides' intent. Don't simply pick one side — merge in a way that honors both sides' intent (e.g., if one side adds a dependency and the other bumps a version, reflect both). **Always summarize the resolution to the user** (never resolve silently). If the intents genuinely conflict, ask the user.
+   - **Auto-generated files** (not limited to lockfiles like `yarn.lock` / `package-lock.json` / `pnpm-lock.yaml` — this covers build artifacts, generated code, and any file people don't hand-edit): **manual resolution is forbidden**.
+     - Resolve the conflict in the corresponding hand-written file first (e.g. `package.json`), then run the regeneration command (`yarn install` / `npm install` / `pnpm install`, etc. — determine which from the project's `packageManager` field or the file type) and let it regenerate automatically.
+     - If the regeneration method is unclear, don't guess — **ask the user**. Once you learn the regeneration method, save it to memory so you don't have to ask again next time.
+     - After running the regeneration command, check `git status` for any newly untracked files or new diffs, and `git add` anything found (don't miss related files updated as a side effect of regeneration).
+   - **Other text files (code, etc.)**: Read the context around the conflict markers and resolve based on both sides' intent. If the intents conflict and it's not obvious, ask the user.
 
-3. 全対象ファイルについて、コンフリクトマーカー（`<<<<<<<`, `=======`, `>>>>>>>`)が残っていないことを確認する。
+3. For all target files, confirm no conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) remain.
    ```bash
-   grep -rn '^<<<<<<<\|^=======$\|^>>>>>>>' <解決したファイル群>
+   grep -rn '^<<<<<<<\|^=======$\|^>>>>>>>' <resolved files>
    ```
-4. 解決したファイルのみ `git add <file>`（無関係な未ステージ変更を巻き込まない）。
-5. 前提で判定した状態に応じて続行する。
-   - rebase 中: `git rebase --continue`
-   - merge 中: `git commit`（merge commit を作る。メッセージはデフォルトのまま基本的に変更しない）
-6. さらにコンフリクトが続く場合は 1 に戻る。完了したら `git status` / `git log --oneline -5` で最終状態を確認して報告する。
+4. `git add <file>` only the resolved files (don't sweep in unrelated unstaged changes).
+5. Continue based on the state determined in Preconditions.
+   - Mid-rebase: `git rebase --continue`
+   - Mid-merge: `git commit` (create the merge commit; leave the default message as-is in general).
+6. If more conflicts appear, go back to step 1. Once done, check the final state with `git status` / `git log --oneline -5` and report.
 
-## 禁止事項
+## Rules (never violate)
 
-- 自動生成ファイル（ロックファイル等）の手編集による解決。
-- 自動生成ファイルの再生成方法が不明な場合に、確認せず推測で解決すること。
-- コンフリクトマーカーが残った状態での `git add`。
-- ユーザーへの報告なしに `package.json` 等の意味的コンフリクトを解決すること。
-- `rebase`/`merge` の中断（`--abort`）を、ユーザーの明示的指示なく行うこと。
+- Resolving auto-generated files (lockfiles, etc.) by hand-editing.
+- Guessing at how to regenerate an auto-generated file when the method is unclear, instead of asking.
+- Running `git add` while conflict markers remain.
+- Resolving semantic conflicts in files like `package.json` without reporting to the user.
+- Aborting a rebase/merge (`--abort`) without the user's explicit instruction.
 
-## 出力
+## Output
 
-- 各ファイルの解決方針を「報告フォーマット」に従って簡潔に報告する。
-- 自動生成ファイルの再生成コマンド実行によって追加で `git add` したファイル・差分があれば、それも報告に含める（何を・なぜ追加で add したか）。
-- 最終的な `git status` と直近コミットログを提示する。
-- 未 push のブランチが rebase で書き換わった場合、push には force push が必要になる旨を警告し、実行前に許可を求める。
-- PR URL 経由の呼び出しの場合、上記報告を `gh pr comment` で該当PRにも投稿する。
+- Report each file's resolution approach concisely, per "Report format".
+- If regenerating an auto-generated file caused additional files/diffs to be `git add`ed, include that in the report (what was added and why).
+- Present the final `git status` and recent commit log.
+- If an unpushed branch was rewritten by rebase, warn that pushing will require a force push, and get permission before doing so.
+- For PR-URL-triggered calls, also post the above report to the PR via `gh pr comment`.
